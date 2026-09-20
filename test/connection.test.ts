@@ -809,7 +809,92 @@ describe('Connection', function () {
       );
       expect(programAccountsWithContext).to.have.property('value');
     }
+
+    {
+      await mockRpcResponse({
+        method: 'getProgramAccounts',
+        params: [
+          programId.publicKey.toBase58(),
+          {
+            commitment: 'confirmed',
+            encoding: 'jsonParsed',
+            withContext: true,
+          },
+        ],
+        value: [
+          {
+            account: {
+              data: ['', 'base64'],
+              executable: false,
+              lamports: LAMPORTS_PER_SOL - fee,
+              owner: programId.publicKey.toBase58(),
+              rentEpoch: 20,
+              space: 0,
+            },
+            pubkey: account0.publicKey.toBase58(),
+          },
+        ],
+        slot: 42,
+        withContext: true,
+      });
+
+      const programAccountsWithContext =
+        await connection.getParsedProgramAccounts(programId.publicKey, {
+          commitment: 'confirmed',
+          withContext: true,
+        });
+      expect(programAccountsWithContext.context.slot).to.equal(42);
+      expect(programAccountsWithContext.value).to.have.length(1);
+      expect(programAccountsWithContext.value[0].pubkey).to.eql(
+        account0.publicKey,
+      );
+    }
   }).timeout(30 * 1000);
+
+  it('passes configuration to parsed token account queries', async () => {
+    const owner = Keypair.generate().publicKey;
+    const mint = Keypair.generate().publicKey;
+    const tokenAccount = Keypair.generate().publicKey;
+
+    await mockRpcResponse({
+      method: 'getTokenAccountsByOwner',
+      params: [
+        owner.toBase58(),
+        {mint: mint.toBase58()},
+        {
+          commitment: 'confirmed',
+          encoding: 'jsonParsed',
+          minContextSlot: 42,
+        },
+      ],
+      value: [
+        {
+          account: {
+            data: {
+              parsed: {info: {}, type: 'account'},
+              program: 'spl-token',
+              space: 165,
+            },
+            executable: false,
+            lamports: LAMPORTS_PER_SOL,
+            owner: mint.toBase58(),
+            rentEpoch: 20,
+          },
+          pubkey: tokenAccount.toBase58(),
+        },
+      ],
+      slot: 43,
+      withContext: true,
+    });
+
+    const response = await connection.getParsedTokenAccountsByOwner(
+      owner,
+      {mint},
+      {commitment: 'confirmed', minContextSlot: 42},
+    );
+    expect(response.context.slot).to.equal(43);
+    expect(response.value[0].pubkey).to.eql(tokenAccount);
+  });
 
   it('get balance', async () => {
     const account = Keypair.generate();
