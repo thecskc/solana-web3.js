@@ -2816,7 +2816,15 @@ export type GetParsedProgramAccountsConfig = {
   filters?: GetProgramAccountsFilter[];
   /** The minimum slot that the request can be evaluated at */
   minContextSlot?: number;
+  /** Wrap the result in an RPC response object containing the context slot */
+  withContext?: boolean;
 };
+
+export type GetParsedProgramAccountsResponse = readonly Readonly<{
+  account: AccountInfo<Buffer | ParsedAccountData>;
+  /** The account pubkey as a base-58 encoded string */
+  pubkey: PublicKey;
+}>[];
 
 /**
  * Configuration object for getMultipleAccounts
@@ -2843,7 +2851,8 @@ export type GetStakeActivationConfig = {
 };
 
 /**
- * Configuration object for `getStakeActivation`
+ * Configuration object for `getTokenAccountsByOwner` and
+ * `getParsedTokenAccountsByOwner`
  */
 export type GetTokenAccountsByOwnerConfig = {
   /** Optional commitment level */
@@ -3518,12 +3527,14 @@ export class Connection {
   async getParsedTokenAccountsByOwner(
     ownerAddress: PublicKey,
     filter: TokenAccountsFilter,
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetTokenAccountsByOwnerConfig,
   ): Promise<
     RpcResponseAndContext<
       Array<{pubkey: PublicKey; account: AccountInfo<ParsedAccountData>}>
     >
   > {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
     let _args: any[] = [ownerAddress.toBase58()];
     if ('mint' in filter) {
       _args.push({mint: filter.mint.toBase58()});
@@ -3531,7 +3542,7 @@ export class Connection {
       _args.push({programId: filter.programId.toBase58()});
     }
 
-    const args = this._buildArgs(_args, commitment, 'jsonParsed');
+    const args = this._buildArgs(_args, commitment, 'jsonParsed', config);
     const unsafeRes = await this._rpcRequest('getTokenAccountsByOwner', args);
     const res = create(unsafeRes, GetParsedTokenAccountsByOwner);
     if ('error' in res) {
@@ -3823,12 +3834,21 @@ export class Connection {
    */
   async getParsedProgramAccounts(
     programId: PublicKey,
+    configOrCommitment: GetParsedProgramAccountsConfig &
+      Readonly<{withContext: true}>,
+  ): Promise<RpcResponseAndContext<GetParsedProgramAccountsResponse>>;
+  // eslint-disable-next-line no-dupe-class-members
+  async getParsedProgramAccounts(
+    programId: PublicKey,
+    configOrCommitment?: GetParsedProgramAccountsConfig | Commitment,
+  ): Promise<GetParsedProgramAccountsResponse>;
+  // eslint-disable-next-line no-dupe-class-members
+  async getParsedProgramAccounts(
+    programId: PublicKey,
     configOrCommitment?: GetParsedProgramAccountsConfig | Commitment,
   ): Promise<
-    Array<{
-      pubkey: PublicKey;
-      account: AccountInfo<Buffer | ParsedAccountData>;
-    }>
+    | GetParsedProgramAccountsResponse
+    | RpcResponseAndContext<GetParsedProgramAccountsResponse>
   > {
     const {commitment, config} =
       extractCommitmentFromConfig(configOrCommitment);
@@ -3839,10 +3859,11 @@ export class Connection {
       config,
     );
     const unsafeRes = await this._rpcRequest('getProgramAccounts', args);
-    const res = create(
-      unsafeRes,
-      jsonRpcResult(array(KeyedParsedAccountInfoResult)),
-    );
+    const baseSchema = array(KeyedParsedAccountInfoResult);
+    const res =
+      config?.withContext === true
+        ? create(unsafeRes, jsonRpcResultAndContext(baseSchema))
+        : create(unsafeRes, jsonRpcResult(baseSchema));
     if ('error' in res) {
       throw new SolanaJSONRPCError(
         res.error,
