@@ -146,6 +146,7 @@ describe('example page on a live surfnet', () => {
       /^Offchain message signature: /,
     );
     await expectSuccess('Sign In', /^Message signature: /);
+    await expectSuccess('Sign In (Offchain)', /^Message signature: /);
     await expectSuccess('Sign Transaction', /Transaction signature valid!/);
 
     await expectSuccess('Send Transaction', /Transaction successful!/);
@@ -178,6 +179,7 @@ describe('example page on a live surfnet', () => {
       /Sign Message \(not supported\)/,
       /Sign Offchain Message \(not supported\)/,
       /Sign In \(not supported\)/,
+      /Sign In \(Offchain\) \(not supported\)/,
       /Send V0 Transaction \(not supported\)/,
       /Send V1 Transaction \(not supported\)/,
     ]) {

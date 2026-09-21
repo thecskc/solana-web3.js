@@ -70,6 +70,7 @@ export default function Page() {
           <SignMessage />
           <SignOffchainMessage />
           <SignIn />
+          <SignIn offchain />
           <SignTransaction />
         </div>
       </section>
