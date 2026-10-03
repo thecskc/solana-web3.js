@@ -21,19 +21,20 @@ import {
  *
  * The signed message must reproduce every field of the input, name the connected account, and
  * carry a valid signature from that account. When `input.address` is set, the wallet must have
- * signed in with that account.
+ * signed in with that account. Malformed output resolves to `false` rather than throwing.
  */
 export async function verifySignIn(
   input: SolanaSignInInput,
   output: SolanaSignInOutput,
 ): Promise<boolean> {
-  if (output.signedMessageFormat?.kind !== 'offchainMessage') {
-    return verifyPlainSignIn(input, output);
-  }
-  if (output.signedMessageFormat.messageVersion !== 1) return false;
-  const address = output.account.address as Address;
-  if (input.address && input.address !== address) return false;
+  // Wallet output is untrusted, so any malformed shape resolves to `false` instead of throwing.
   try {
+    if (output.signedMessageFormat?.kind !== 'offchainMessage') {
+      return verifyPlainSignIn(input, output);
+    }
+    if (output.signedMessageFormat.messageVersion !== 1) return false;
+    const address = output.account.address as Address;
+    if (input.address && input.address !== address) return false;
     const content = output.signedMessage as unknown as OffchainMessageBytes;
     const message = getOffchainMessageV1Decoder().decode(content);
     const text = deriveSignInMessageText(

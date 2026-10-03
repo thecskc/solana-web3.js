@@ -6,6 +6,7 @@ import {
   type Address,
   type KeyPairSigner,
 } from '@solana/kit';
+import type {SolanaSignInOutput} from '@solana/wallet-standard-features';
 import {createSignInMessageText} from '@solana/wallet-standard-util';
 import {beforeAll, describe, expect, it} from 'vitest';
 import {verifySignIn} from '../sign-in.js';
@@ -138,5 +139,29 @@ describe('verifySignIn', () => {
     expect(await verifySignIn({...input, statement: 'Nope.'}, output)).toBe(
       false,
     );
+  });
+
+  it.each([
+    ['absent', undefined],
+    ['empty', new Uint8Array()],
+    ['a string', 'not bytes'],
+  ])(
+    'returns false instead of throwing for a plain sign-in whose signature is %s',
+    async (_, signature) => {
+      const signedMessage = new TextEncoder().encode(
+        createSignInMessageText({...input, address: signer.address}),
+      );
+      const output = {account: account(signer), signature, signedMessage};
+      expect(
+        await verifySignIn(input, output as unknown as SolanaSignInOutput),
+      ).toBe(false);
+    },
+  );
+
+  it('returns false instead of throwing for an offchain sign-in with no account', async () => {
+    const {account: _, ...output} = await offchainOutput();
+    expect(
+      await verifySignIn(input, output as unknown as SolanaSignInOutput),
+    ).toBe(false);
   });
 });
