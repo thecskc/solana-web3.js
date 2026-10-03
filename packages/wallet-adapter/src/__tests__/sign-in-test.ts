@@ -164,4 +164,86 @@ describe('verifySignIn', () => {
       await verifySignIn(input, output as unknown as SolanaSignInOutput),
     ).toBe(false);
   });
+
+  async function plainOutput({
+    by = signer,
+    text = createSignInMessageText({...input, address: by.address}),
+  }: {by?: KeyPairSigner; text?: string} = {}) {
+    const signedMessage = new TextEncoder().encode(text);
+    return {
+      account: account(by),
+      signature: await signBytes(by, signedMessage),
+      signedMessage,
+    };
+  }
+
+  it('rejects a plain sign-in whose text names an account other than the signer', async () => {
+    const output = await plainOutput({
+      text: createSignInMessageText({...input, address: other.address}),
+    });
+    expect(await verifySignIn(input, output)).toBe(false);
+  });
+
+  it.each([
+    ['missing', undefined],
+    ['another account', 'other'],
+  ])(
+    'rejects a plain sign-in whose account address is %s',
+    async (_, which) => {
+      const output = await plainOutput();
+      const address = which === 'other' ? other.address : undefined;
+      expect(
+        await verifySignIn(input, {
+          ...output,
+          account: {...output.account, address},
+        } as unknown as SolanaSignInOutput),
+      ).toBe(false);
+    },
+  );
+
+  it('rejects an offchain sign-in whose account public key is not its address', async () => {
+    const output = await offchainOutput();
+    expect(
+      await verifySignIn(input, {
+        ...output,
+        account: {...output.account, publicKey: account(other).publicKey},
+      }),
+    ).toBe(false);
+  });
+
+  it.each([
+    ['an oversized signature', {signature: new Uint8Array(65)}],
+    ['a truncated signature', {signature: new Uint8Array(63)}],
+    ['no signed message', {signedMessage: undefined}],
+  ])('returns false for a plain sign-in with %s', async (_, patch) => {
+    const output = {...(await plainOutput()), ...patch};
+    expect(
+      await verifySignIn(input, output as unknown as SolanaSignInOutput),
+    ).toBe(false);
+  });
+
+  it.each([
+    ['undefined', undefined],
+    ['an empty object', {}],
+  ])('returns false for an output that is %s', async (_, output) => {
+    expect(
+      await verifySignIn(input, output as unknown as SolanaSignInOutput),
+    ).toBe(false);
+  });
+
+  it('accepts a plain sign-in whose bytes come from another realm', async () => {
+    const output = await plainOutput();
+    const {runInNewContext} = await import('node:vm');
+    const foreign = (bytes: Uint8Array) =>
+      runInNewContext('Uint8Array.from(b)', {
+        b: Array.from(bytes),
+      }) as Uint8Array;
+    expect(
+      await verifySignIn(input, {
+        ...output,
+        signature: foreign(output.signature),
+        signedMessage: foreign(output.signedMessage),
+      }),
+    ).toBe(true);
+  });
 });
