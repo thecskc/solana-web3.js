@@ -5,15 +5,17 @@ import {
   isTransactionPartialSigner,
   signatureBytes,
   SOLANA_ERROR__WALLET__NOT_CONNECTED,
+  type SignatureBytes,
 } from '@solana/kit';
 import {walletSigner, type WalletPluginConfig} from '@solana/kit-plugin-wallet';
 import type {
   SolanaSignAndSendTransactionFeature,
+  SolanaSignInFeature,
   SolanaSignInInput,
   SolanaSignOffchainMessageFeature,
   SolanaSignTransactionFeature,
 } from '@solana/wallet-standard-features';
-import {getWalletAccountFeature} from '@wallet-standard/ui';
+import {getWalletAccountFeature, getWalletFeature} from '@wallet-standard/ui';
 import {getWalletAccountForUiWalletAccount} from '@wallet-standard/ui-registry';
 import {
   PublicKey,
@@ -93,6 +95,8 @@ function assertEndpointMatchesChain(
     );
   }
 }
+
+const OFFCHAIN_SIGN_IN_FEATURE_VERSIONS: readonly string[] = ['1.1.0'];
 
 export interface WalletController
   extends Pick<
@@ -263,10 +267,26 @@ export function createWalletController({
       );
     }
   }
+  const supportsSignInWithOffchainMessage = (wallet: UiWallet) => {
+    if (!wallet.features.includes('solana:signIn')) return false;
+    const feature = getWalletFeature(
+      wallet,
+      'solana:signIn',
+    ) as SolanaSignInFeature['solana:signIn'];
+    return OFFCHAIN_SIGN_IN_FEATURE_VERSIONS.includes(feature.version);
+  };
   async function signIn(input?: SolanaSignInInput) {
     let target: UiWallet | undefined;
     try {
       target = selectedWallet();
+      if (
+        input?.useOffchainMessage &&
+        !supportsSignInWithOffchainMessage(target)
+      ) {
+        throw new WalletNotReadyError(
+          'The wallet does not support Sign In With Solana over offchain messages.',
+        );
+      }
       return await namespace.signIn(target, input ?? {});
     } catch (error) {
       if (superseded(error)) throw error;
@@ -282,7 +302,7 @@ export function createWalletController({
   };
   const canSignMessages = () =>
     active()?.account.features.includes('solana:signMessage') ?? false;
-  async function signMessage(message: Uint8Array): Promise<Uint8Array> {
+  async function signMessage(message: Uint8Array): Promise<SignatureBytes> {
     const connected = active();
     try {
       if (!connected || !canSignMessages()) {
@@ -290,7 +310,7 @@ export function createWalletController({
           'The connected wallet cannot sign messages.',
         );
       }
-      return await namespace.signMessage(message);
+      return signatureBytes(await namespace.signMessage(message));
     } catch (error) {
       throw report(
         wrap(error, WalletSignMessageError, 'Wallet message signing failed.'),
@@ -330,7 +350,7 @@ export function createWalletController({
       });
       if (!output)
         throw new Error('The wallet returned no offchain message signature.');
-      return output;
+      return {...output, signature: signatureBytes(output.signature)};
     } catch (error) {
       throw report(
         wrap(
@@ -522,6 +542,9 @@ export function createWalletController({
         signIn: selected?.features.includes('solana:signIn')
           ? signIn
           : undefined,
+        supportsSignInWithOffchainMessage: selected
+          ? supportsSignInWithOffchainMessage(selected)
+          : false,
         autoConnect: config.autoConnect ?? true,
         account: connected?.account ?? null,
         address: connected?.account.address ?? null,

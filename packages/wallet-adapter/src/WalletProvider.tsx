@@ -67,6 +67,7 @@ function pendingSnapshot(
     publicKey: null,
     signer: null,
     supportedTransactionVersions: null,
+    supportsSignInWithOffchainMessage: false,
     connected: false,
     connecting: false,
     disconnecting: false,

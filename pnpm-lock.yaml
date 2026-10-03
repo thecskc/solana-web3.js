@@ -61,9 +61,6 @@ importers:
       '@solana/wallet-adapter':
         specifier: workspace:*
         version: link:../../packages/wallet-adapter
-      '@solana/wallet-standard-util':
-        specifier: ^1.1.4
-        version: 1.1.4
       '@solana/web3.js':
         specifier: workspace:*
         version: link:../../packages/web3.js
@@ -99,8 +96,11 @@ importers:
         specifier: ^0.20.0
         version: 0.20.0(@solana/kit@8.3.0(bufferutil@4.0.8)(typescript@5.9.3)(utf-8-validate@5.0.10))(react@19.2.8)(typescript@5.9.3)
       '@solana/wallet-standard-features':
-        specifier: ^1.4.0
-        version: 1.4.0
+        specifier: ^1.5.0
+        version: 1.5.0
+      '@solana/wallet-standard-util':
+        specifier: ^1.1.4
+        version: 1.1.4
       '@wallet-standard/ui':
         specifier: ^1.0.3
         version: 1.0.3
@@ -114,9 +114,6 @@ importers:
       '@solana/surfpool':
         specifier: ^1.5.0
         version: 1.5.0(@solana/kit@8.3.0(bufferutil@4.0.8)(typescript@5.9.3)(utf-8-validate@5.0.10))
-      '@solana/wallet-standard-util':
-        specifier: ^1.1.4
-        version: 1.1.4
       '@solana/web3.js':
         specifier: workspace:*
         version: link:../web3.js
@@ -2126,10 +2123,6 @@ packages:
 
   '@solana/wallet-standard-chains@1.1.2':
     resolution: {integrity: sha512-EZobEGclDBAFplpJC5F3d/s8Xnlqc5isNKuPrd5o9ZPZ7tWN84O0e68yIZ8MAOj9V7ieRadNiHtql7uIXCTyXg==}
-    engines: {node: '>=22'}
-
-  '@solana/wallet-standard-features@1.4.0':
-    resolution: {integrity: sha512-f0tAdqwM2aL6CiFbIgt9h5zKFp+mgY/iNGwoxPMTj9VSTeQj7d1GGSmWhZw0XWoZ4N/1tnKTKmYFq+Dyq08jRw==}
     engines: {node: '>=22'}
 
   '@solana/wallet-standard-features@1.5.0':
@@ -6489,11 +6482,6 @@ snapshots:
   '@solana/wallet-standard-chains@1.1.2':
     dependencies:
       '@wallet-standard/base': 1.1.1
-
-  '@solana/wallet-standard-features@1.4.0':
-    dependencies:
-      '@wallet-standard/base': 1.1.1
-      '@wallet-standard/features': 1.1.1
 
   '@solana/wallet-standard-features@1.5.0':
     dependencies:

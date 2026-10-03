@@ -3,10 +3,12 @@ import {
   generateKeyPairSigner,
   getBase58Encoder,
   getBase64Decoder,
+  getOffchainMessageV1Encoder,
   getTransactionCodec,
   type KeyPairSigner,
+  type Address,
 } from '@solana/kit';
-import {createSignInMessage} from '@solana/wallet-standard-util';
+import {createSignInMessageText} from '@solana/wallet-standard-util';
 
 const STANDARD_FEATURES = [
   'standard:connect',
@@ -170,31 +172,51 @@ export async function createTestWallet(options: TestWalletOptions = {}) {
         ),
     },
     'solana:signIn': {
-      version: '1.0.0' as const,
+      version: '1.1.0' as const,
       signIn: async (
         ...inputs: readonly {
           address?: string;
           domain?: string;
+          useOffchainMessage?: {messageVersion: 1};
           [field: string]: unknown;
         }[]
       ) =>
         Promise.all(
-          (inputs.length ? inputs : [{}]).map(async input => {
-            const account = accountFor(input.address ?? accounts[0]!.address);
-            const signedMessage = createSignInMessage({
-              ...input,
-              address: account.address,
-              domain: input.domain ?? window.location.host,
-            });
-            return {
-              account,
-              signature: await signBytes(
-                signerFor(account.address),
+          (inputs.length ? inputs : [{}]).map(
+            async ({useOffchainMessage, ...input}) => {
+              const account = accountFor(input.address ?? accounts[0]!.address);
+              const text = createSignInMessageText({
+                ...input,
+                address: account.address,
+                domain: input.domain ?? window.location.host,
+              });
+              const signedMessage = useOffchainMessage
+                ? new Uint8Array(
+                    getOffchainMessageV1Encoder().encode({
+                      content: text,
+                      requiredSignatories: [
+                        {address: account.address as Address},
+                      ],
+                      version: 1,
+                    }),
+                  )
+                : new TextEncoder().encode(text);
+              return {
+                account,
+                signature: await signBytes(
+                  signerFor(account.address),
+                  signedMessage,
+                ),
                 signedMessage,
-              ),
-              signedMessage,
-            };
-          }),
+                ...(useOffchainMessage && {
+                  signedMessageFormat: {
+                    kind: 'offchainMessage' as const,
+                    messageVersion: 1 as const,
+                  },
+                }),
+              };
+            },
+          ),
         ),
     },
     'solana:signOffchainMessage': {

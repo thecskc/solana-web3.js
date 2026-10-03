@@ -7,7 +7,11 @@ import {describe, expect, it, vi} from 'vitest';
 import {ConnectionProvider} from '../ConnectionProvider.js';
 import {WalletProvider} from '../WalletProvider.js';
 import {useAnchorWallet, useConnection, useWallet} from '../index.js';
-import {WalletConfigError, type WalletControllerOptions} from '../core.js';
+import {
+  WalletConfigError,
+  WalletNotReadyError,
+  type WalletControllerOptions,
+} from '../core.js';
 import {standardWallet, registerWallets} from './helpers.js';
 
 describe('provider', () => {
@@ -314,7 +318,7 @@ it('signs offchain messages through the solana:signOffchainMessage feature', asy
   act(() => result.current.select(wallet.name));
   await act(async () => result.current.connect());
   expect(result.current.signOffchainMessage).toBeTypeOf('function');
-  expect(await result.current.signOffchainMessage!('hello')).toBe(output);
+  expect(await result.current.signOffchainMessage!('hello')).toEqual(output);
   expect(signOffchainMessage).toHaveBeenCalledExactlyOnceWith({
     account: wallet.accounts[0],
     message: 'hello',
@@ -331,4 +335,67 @@ it('signs offchain messages through the solana:signOffchainMessage feature', asy
     messageVersion: 1,
     requiredSigners: [wallet.accounts[0]!.publicKey, extraSigner],
   });
+});
+
+it('signs in over an offchain message only when the wallet advertises solana:signIn 1.1.0', async () => {
+  const {wallet} = standardWallet();
+  const output = {
+    account: wallet.accounts[0]!,
+    signedMessage: new Uint8Array([1]),
+    signature: new Uint8Array(64),
+    signedMessageFormat: {kind: 'offchainMessage', messageVersion: 1},
+  };
+  const signIn = vi.fn(async () => [output]);
+  const legacy = {
+    ...wallet,
+    features: {...wallet.features, 'solana:signIn': {version: '1.0.0', signIn}},
+  };
+  const upgraded = standardWallet('Upgraded wallet', 1).wallet;
+  const offchainOutput = {...output, account: upgraded.accounts[0]!};
+  const offchainSignIn = vi.fn(async () => [offchainOutput]);
+  const current = {
+    ...upgraded,
+    features: {
+      ...upgraded.features,
+      'solana:signIn': {version: '1.1.0', signIn: offchainSignIn},
+    },
+  };
+  const onError = vi.fn();
+  registerWallets(legacy, current);
+  const {result} = renderHook(useWallet, {
+    wrapper: ({children}: {children: ReactNode}) => (
+      <WalletProvider chain="solana:devnet" storage={null} onError={onError}>
+        {children}
+      </WalletProvider>
+    ),
+  });
+  const input = {
+    statement: 'Please sign in.',
+    useOffchainMessage: {messageVersion: 1},
+  } as const;
+
+  expect(result.current.supportsSignInWithOffchainMessage).toBe(false);
+  act(() => result.current.select(legacy.name));
+  expect(result.current.supportsSignInWithOffchainMessage).toBe(false);
+  await act(async () => {
+    await expect(result.current.signIn!(input)).rejects.toThrow(
+      WalletNotReadyError,
+    );
+  });
+  expect(signIn).not.toHaveBeenCalled();
+  expect(onError).toHaveBeenCalledOnce();
+  await act(async () => {
+    expect(await result.current.signIn!({statement: 'Plain'})).toBe(output);
+  });
+  expect(signIn).toHaveBeenCalledExactlyOnceWith({statement: 'Plain'});
+
+  act(() => result.current.select(current.name));
+  expect(result.current.supportsSignInWithOffchainMessage).toBe(true);
+  await act(async () => {
+    expect(await result.current.signIn!(input)).toBe(offchainOutput);
+  });
+  expect(offchainSignIn).toHaveBeenCalledExactlyOnceWith(input);
+  expect(result.current.publicKey?.toBase58()).toBe(
+    upgraded.accounts[0]!.address,
+  );
 });
